@@ -202,6 +202,7 @@ export const getAllTransaction = async (req, res) => {
         { receiverAccountId: accountIds},  // Filter for invoices where user is the receiver
       ],
     })
+    .sort({ createdAt: -1 }) 
       .skip(skip)
       .limit(Number(page_size))
       .populate({
@@ -231,3 +232,56 @@ export const getAllTransaction = async (req, res) => {
     return res.status(500).json({ message: "Server error. Unable to fetch invoices." });
   }
 };
+
+export const getTransactionsByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
+    // Get all accounts linked to the user
+    const userAccounts = await Account.find({ userId: userObjectId }).select('_id');
+    const accountIds = userAccounts.map(acc => acc._id);
+
+    if (accountIds.length === 0) {
+      return res.status(404).json({ message: "No accounts found for this user." });
+    }
+
+    // Find all transactions where user is sender or receiver
+    const invoices = await Invoice.find({
+      $or: [
+        { senderAccountId: { $in: accountIds } },
+        { receiverAccountId: { $in: accountIds } },
+      ],
+    })
+    .sort({ createdAt: -1 })
+    .populate({
+      path: "senderAccountId",
+      populate: {
+        path: "userId",
+        select: "fullName email role",
+      },
+    })
+    .populate({
+      path: "receiverAccountId",
+      populate: {
+        path: "userId",
+        select: "fullName email role",
+      },
+    });
+
+    if (invoices.length === 0) {
+      return res.status(404).json({ message: "No transactions found for this user." });
+    }
+
+    res.status(200).json(invoices);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+

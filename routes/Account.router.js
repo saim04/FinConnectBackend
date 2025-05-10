@@ -5,6 +5,7 @@ import {
   createAccount,
   transferMoney,
   getAllTransaction,
+  getTransactionsByUserId,
 } from "../controllers/Account.cotroller.js";
 import { verifyToken } from "../middlewares/auth.middleware.js";
 import { verifyActiveSubscription } from "../middlewares/subscription.middleware.js";
@@ -41,5 +42,7 @@ router.get(
   requestCounter,
   getAllTransaction
 );
+
+router.get("/transactions/:userId", getTransactionsByUserId);
 
 export default router;
