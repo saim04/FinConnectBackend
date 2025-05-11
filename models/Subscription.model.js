@@ -20,6 +20,9 @@ const subscriptionSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  nextPlan: {
+    type: String,
+  },
   status: {
     type: String,
     enum: ["active", "canceled", "past_due", "unpaid"],

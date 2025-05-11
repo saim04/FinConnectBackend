@@ -60,6 +60,7 @@ export const handleStripeWebhook = async (req, res) => {
         stripeCustomerId: customer,
         stripeSubscriptionId: subscription,
         plan: stripeSubscription.items.data[0].price.id || "Unknown",
+        nextPlan: stripeSubscription.items.data[0].price.id || "Unknown",
         status: stripeSubscription.status,
         startDate: new Date(stripeSubscription.start_date * 1000),
         endDate: new Date(
@@ -90,17 +91,27 @@ export const handleStripeWebhook = async (req, res) => {
 
     case "invoice.payment_succeeded": {
       const invoice = event.data.object;
+
       const subscription = await Subscription.findOne({
         stripeSubscriptionId: invoice.subscription,
       });
 
       if (subscription) {
+        const invoiceLine = invoice.lines.data[0];
+        console.log(invoiceLine);
+
+        // Update fields based on the charged invoice
         subscription.status = "active";
-        subscription.nextBillingDate = new Date(
-          invoice.lines.data[0].period.end * 1000
-        );
+        subscription.nextBillingDate = new Date(invoiceLine.period.end * 1000);
+        subscription.endDate = new Date(invoiceLine.period.end * 1000); // Keep in sync
+        subscription.plan = invoiceLine.price.id;
+        subscription.nextPlan = invoiceLine.price.id;
+        subscription.amount = invoiceLine.price.unit_amount;
+        subscription.currency = invoiceLine.price.currency;
+
         await subscription.save();
       }
+
       break;
     }
 
@@ -139,6 +150,52 @@ export const getSubscription = async (req, res) => {
   } catch (error) {
     console.error("Error fetching subscription:", error);
     res.status(500).json({ message: "Internal server error" });
+  }
+};
+export const updateSubscriptionPlan = async (req, res) => {
+  try {
+    const { userId, newPriceId } = req.body;
+
+    // 1. Find the existing subscription
+    const subscription = await Subscription.findOne({ userId });
+
+    if (!subscription) {
+      return res.status(404).json({ message: "Subscription not found" });
+    }
+
+    // 2. Retrieve subscription from Stripe
+    const stripeSubscription = await stripe.subscriptions.retrieve(
+      subscription.stripeSubscriptionId
+    );
+
+    const subscriptionItemId = stripeSubscription.items.data[0].id;
+
+    // 3. Update subscription item to use new price ID at next billing
+    const updatedSubscription = await stripe.subscriptions.update(
+      subscription.stripeSubscriptionId,
+      {
+        items: [
+          {
+            id: subscriptionItemId,
+            price: newPriceId,
+          },
+        ],
+        proration_behavior: "none", // 👈 prevent immediate charge
+      }
+    );
+    subscription.nextPlan = newPriceId;
+    await subscription.save();
+
+    return res.status(200).json({
+      message: "Subscription plan scheduled to change at next billing cycle",
+      subscription,
+    });
+  } catch (error) {
+    console.error("Error updating subscription plan:", error);
+    return res.status(500).json({
+      message: "Failed to update subscription plan",
+      error: error.message,
+    });
   }
 };
 
