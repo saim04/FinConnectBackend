@@ -154,14 +154,10 @@ export const getSubscription = async (req, res) => {
 };
 export const updateSubscriptionPlan = async (req, res) => {
   try {
-    const { userId, newPriceId } = req.body;
-
+    const { newPriceId } = req.body;
+    const userId = req.user.id;
     // 1. Find the existing subscription
     const subscription = await Subscription.findOne({ userId });
-
-    if (!subscription) {
-      return res.status(404).json({ message: "Subscription not found" });
-    }
 
     // 2. Retrieve subscription from Stripe
     const stripeSubscription = await stripe.subscriptions.retrieve(
@@ -180,7 +176,7 @@ export const updateSubscriptionPlan = async (req, res) => {
             price: newPriceId,
           },
         ],
-        proration_behavior: "none", // 👈 prevent immediate charge
+        proration_behavior: "none",
       }
     );
     subscription.nextPlan = newPriceId;
