@@ -47,7 +47,7 @@ app.use("/api/stripe", stripeRoutes);
 
 // Routers
 app.get("/", (req, res) => {
-  res.send("Hello, Webkode API is working!");
+  res.send("Hello, Finconnect API is working!");
 });
 
 const port = process.env.PORT || 5000;
